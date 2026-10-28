@@ -112,6 +112,7 @@ fun File.rel(): String = this.path.removePrefix("$workDir/").removePrefix("$work
 fun logApply(file: File, detail: String) = println("[apply]-${file.rel()}: $detail")
 fun logPostfix(file: File, detail: String) = println("[postfix]-${file.rel()}: $detail")
 fun logRevert(file: File, detail: String) = println("[revert]-${file.rel()}: $detail")
+fun logContext(file: File, detail: String) = println("[context]-${file.rel()}: $detail")
 
 val fdinfoCommentStart = Regex("""^[ \t]*/\*$""")
 val fdinfoCommentEnd = Regex("""^[ \t]*u32 mask = mark->mask & IN_ALL_EVENTS;$""")
@@ -195,7 +196,7 @@ fun revertAndroid15VmaBlock(taskMmu: File, namespace: File) {
     logRevert(taskMmu, "removed 'pagemap_entry_t *res = NULL;' declaration")
 }
 
-// context 模式:补回 SUSFS 补丁 hunk #1 期望
+// context 模式:自动补回 SUSFS 补丁 hunk #1 期望、但 GKI 源码里已被 Google 删掉的行
 val traceHookInclude = Regex("""^#include\s+(<trace/hooks/[^>]+>)""")
 val anyInclude = Regex("""^#include\s+([<"][^>"]+[>"])""")
 
@@ -239,6 +240,7 @@ fun parsePatchContext(patchLines: List<String>): Map<String, List<String>> {
     return files
 }
 
+// 树里已不存在的 trace hook 头文件:建一个空桩
 fun ensureContextStub(inc: String): File? {
     val rel = inc.trim('<', '>')
     val header = File(workDir, "include/$rel")
@@ -256,7 +258,7 @@ fun ensureContextStub(inc: String): File? {
 
 fun restoreContext(patch: File) {
     if (!patch.exists()) {
-        println("[apply]-context: patch not found: ${patch.path}")
+        println("[context] patch not found: ${patch.path}")
         exitProcess(2)
     }
     val plan = parsePatchContext(patch.readLines())
@@ -279,12 +281,12 @@ fun restoreContext(patch: File) {
                 cursor += found + 1
                 continue
             }
-            if (!traceHookInclude.containsMatchIn(want)) continue
+            if (!traceHookInclude.containsMatchIn(want)) continue // 只补 trace/hooks 这一类
 
             lines.add(cursor, want)
             present.add(cursor, want)
-            logApply(target, "restored missing patch context: $want")
-            ensureContextStub(inc)?.let { logApply(it, "created empty stub header for context-only include $inc") }
+            logContext(target, "restored missing patch context: $want")
+            ensureContextStub(inc)?.let { logContext(it, "created empty stub header for context-only include $inc") }
             cursor++
             changed = true
         }
@@ -293,7 +295,7 @@ fun restoreContext(patch: File) {
             touched = true
         }
     }
-    if (!touched) println("[apply]-context: already complete, nothing to restore")
+    if (!touched) println("[context] already complete, nothing to restore")
 }
 
 /** 兜底修复 */
@@ -410,7 +412,6 @@ fun apply() {
             )
             logApply(openC, "added #include <linux/mnt_idmapping.h> directly after #include <linux/compat.h>")
 
-            // 这些子版本没有 mnt_idmapping.h(helpers 在 linux/fs.h),include 只作上下文,补个空桩
             val idmap = f("include/linux/mnt_idmapping.h")
             if (!idmap.exists()) {
                 idmap.writeText("/* Stub: mnt idmap helpers live in linux/fs.h on this sublevel. */\n")
