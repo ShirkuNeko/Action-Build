@@ -109,9 +109,12 @@ val workDir = args.getOrNull(1) ?: "kernel_workspace/kernel_platform/common"
 
 fun f(relPath: String) = File(workDir, relPath)
 fun File.rel(): String = this.path.removePrefix("$workDir/").removePrefix("$workDir\\")
-fun logApply(file: File, detail: String) = println("[apply]-${file.rel()}: $detail")
-fun logPostfix(file: File, detail: String) = println("[postfix]-${file.rel()}: $detail")
-fun logRevert(file: File, detail: String) = println("[revert]-${file.rel()}: $detail")
+val useColor = System.getenv("NO_COLOR") == null
+fun tag(name: String, code: String) =
+    if (useColor) "\u001B[${code}m[$name]\u001B[0m" else "[$name]"
+fun logApply(file: File, detail: String) = println("${tag("apply", "31")}-${file.rel()}: $detail")          // 红
+fun logPostfix(file: File, detail: String) = println("${tag("postfix", "38;5;208")}-${file.rel()}: $detail") // 橙
+fun logRevert(file: File, detail: String) = println("${tag("revert", "33")}-${file.rel()}: $detail")         // 黄
 
 val fdinfoCommentStart = Regex("""^[ \t]*/\*$""")
 val fdinfoCommentEnd = Regex("""^[ \t]*u32 mask = mark->mask & IN_ALL_EVENTS;$""")
