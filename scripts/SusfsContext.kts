@@ -10,7 +10,10 @@ val patchPath = args.getOrNull(1) ?: run {
 
 fun f(relPath: String) = File(workDir, relPath)
 fun File.rel(): String = this.path.removePrefix("$workDir/").removePrefix("$workDir\\")
-fun logContext(file: File, detail: String) = println("[context]-${file.rel()}: $detail")
+val useColor = System.getenv("NO_COLOR") == null
+fun tag(name: String, code: String) =
+    if (useColor) "\u001B[${code}m[$name]\u001B[0m" else "[$name]"
+fun logContext(file: File, detail: String) = println("${tag("context", "32")}-${file.rel()}: $detail")
 
 val traceHookInclude = Regex("""^#include\s+(<trace/hooks/[^>]+>)""")
 val anyInclude = Regex("""^#include\s+([<"][^>"]+[>"])""")
@@ -73,7 +76,7 @@ fun ensureContextStub(inc: String): File? {
 
 fun restoreContext(patch: File) {
     if (!patch.exists()) {
-        println("[context] patch not found: ${patch.path}")
+        println("${tag("context", "32")} patch not found: ${patch.path}")
         exitProcess(2)
     }
     val plan = parsePatchContext(patch.readLines())
@@ -110,7 +113,7 @@ fun restoreContext(patch: File) {
             touched = true
         }
     }
-    if (!touched) println("[context] already complete, nothing to restore")
+    if (!touched) println("${tag("context", "32")} already complete, nothing to restore")
 }
 
 restoreContext(File(patchPath))
